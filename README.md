@@ -12,12 +12,6 @@ O **alerta-rio** é um projeto desenvolvido para a disciplina de Desenvolvimento
 * **Banco de Dados:** PostgreSQL (psycopg2)
 * **Deploy:** GitHub Pages (Front-end) / Render (Back-end)
 
-## 📋 Etapas de Desenvolvimento (Metodologia UniCarioca)
-- [x] Etapa 1: Levantamento de necessidades e Plano de Ação.
-- [x] Etapa 2: Desenvolvimento do Web Scraper (ISP-RJ) e estrutura da API.
-- [x] Etapa 3: Implementação do Mapa Interativo e integração dos dados georreferenciados.
-- [ ] Etapa 4: Apresentação Final e Avaliação.
-
 ## 🚀 Como Executar Localmente
 
 ### Pré-requisitos
