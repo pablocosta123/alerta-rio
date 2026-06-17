@@ -1,0 +1,23 @@
+# Python 
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+
+# Configurações locais e Credenciais 
+.env
+.env.local
+
+# Bancos de dados locais
+*.db
+*.sqlite3
+.DS_Store
+Thumbs.db
+
+# Pastas de ferramentas do editor
+.navigator/
+.cursor/
+.vscode/

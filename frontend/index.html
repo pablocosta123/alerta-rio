@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alerta-Rio | Dashboard Profissional</title>
+    
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 0; display: flex; font-family: 'Segoe UI', Tahoma, sans-serif; height: 100vh; overflow: hidden; position: relative; }
+        
+        #map { flex: 1; height: 100%; z-index: 1; }
+
+        #sidebar {
+            width: 350px;
+            height: 100vh;
+            background: #2c3e50;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            transition: transform 0.3s ease;
+            z-index: 2000;
+            box-shadow: 4px 0 10px rgba(0,0,0,0.3);
+            flex-shrink: 0;
+            position: absolute;
+            left: 0;
+            top: 0;
+            transform: translateX(0);
+        }
+
+        #sidebar.closed {
+            transform: translateX(-350px);
+        }
+
+        .sidebar-header { padding: 20px; background: #1a252f; }
+        
+        #toggle-btn {
+            position: absolute;
+            right: -45px;
+            top: 20px;
+            width: 45px;
+            height: 45px;
+            background: #2c3e50;
+            color: white;
+            border: none;
+            cursor: pointer;
+            font-size: 20px;
+            border-radius: 0 5px 5px 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 5px 0 5px rgba(0,0,0,0.15);
+            z-index: 2005;
+        }
+
+        .sidebar-content { flex: 1; overflow-y: auto; padding: 20px; }
+
+        .ranking-item {
+            background: #34495e;
+            padding: 12px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            cursor: pointer;
+            transition: transform 0.2s, background 0.2s;
+        }
+        .ranking-item:hover { background: #1abc9c; transform: scale(1.02); }
+        .ranking-name { font-weight: 500; font-size: 0.95em; }
+        .ranking-value { background: #1a252f; padding: 4px 8px; border-radius: 5px; font-size: 0.85em; font-weight: bold; }
+
+        h2 { margin: 0; font-size: 1.4em; }
+        p { margin: 5px 0; color: #bdc3c7; font-size: 0.85em; }
+        hr { border: 0; border-top: 1px solid #3e4f5f; margin: 15px 0; }
+
+        .leaflet-popup-content-wrapper { border-radius: 8px; }
+        .popup-list { list-style: none; padding: 0; margin: 10px 0; min-width: 180px; }
+        .popup-list li { border-bottom: 1px solid #eee; padding: 6px 0; display: flex; justify-content: space-between; font-size: 0.9em; }
+
+        #modal-tabela {
+            display: none; 
+            position: fixed; 
+            top: 5%; 
+            left: 5%; 
+            width: 90%; 
+            height: 90%;
+            background: white; 
+            z-index: 3000; 
+            border-radius: 12px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.5); 
+            overflow: hidden; 
+            color: #333;
+            flex-direction: column;
+        }
+        .modal-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #2c3e50; padding: 20px 25px; background: white; flex-shrink: 0; }
+        .btn-fechar { padding: 10px 20px; background: #e74c3c; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; transition: background 0.2s; }
+        .btn-fechar:hover { background: #c0392b; }
+        
+        .modal-table-container { flex: 1; overflow-y: auto; padding: 0 25px 25px 25px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+        th, td { border: 1px solid #ddd; padding: 12px; text-align: left; }
+        th { background-color: #2c3e50; color: white; position: sticky; top: 0; z-index: 10; }
+        tr:nth-child(even) { background-color: #f9f9f9; }
+    </style>
+</head>
+<body>
+
+    <aside id="sidebar">
+        <button id="toggle-btn" title="Abrir/Fechar Menu">☰</button>
+        <div class="sidebar-header">
+            <h2>Alerta-Rio</h2>
+            <p>Estatísticas de Segurança Pública</p>
+            <p><small>Dados históricos: 2022 - 2026</small></p>
+        </div>
+        <div class="sidebar-content">
+            <div id="ranking-list">Carregando dados...</div>
+        </div>
+    </aside>
+
+    <div id="map"></div>
+
+    <div id="modal-tabela">
+        <div class="modal-header">
+            <h2 id="modal-titulo">Histórico de Ocorrências</h2>
+            <button class="btn-fechar" onclick="document.getElementById('modal-tabela').style.display='none'">Fechar [X]</button>
+        </div>
+        <div class="modal-table-container">
+            <table id="tabela-crimes">
+                <thead>
+                    <tr>
+                        <th>Mês/Ano</th>
+                        <th>Tipo de Crime</th>
+                        <th>Quantidade Total</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <script>
+        const map = L.map('map').setView([-22.9068, -43.1729], 9);
+        L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        const sidebar = document.getElementById('sidebar');
+        const toggleBtn = document.getElementById('toggle-btn');
+        
+        toggleBtn.addEventListener('click', (e) => {
+            e.preventDefault();
+            sidebar.classList.toggle('closed');
+            setTimeout(() => { map.invalidateSize(); }, 300);
+        });
+
+        function carregarTabelaFiltro(municipio) {
+            document.getElementById('modal-tabela').style.display = 'flex';
+            document.getElementById('modal-titulo').innerText = "Histórico Detalhado: " + municipio;
+            
+            const tbody = document.querySelector("#tabela-crimes tbody");
+            tbody.innerHTML = "<tr><td colspan='3'>Buscando histórico de registros...</td></tr>";
+
+            fetch(`http://127.0.0.1:8000/crimes/detalhes/${municipio}`)
+                .then(res => res.json())
+                .then(dados => {
+                    if(!dados || dados.length === 0) {
+                        tbody.innerHTML = "<tr><td colspan='3'>Nenhum dado encontrado para este município.</td></tr>";
+                        return;
+                    }
+                    tbody.innerHTML = dados.map(d => {
+                        return `
+                            <tr>
+                                <td><b>${d.periodo || 'N/A'}</b></td>
+                                <td>${d.tipo_crime || 'Desconhecido'}</td>
+                                <td>${(d.quantidade || 0).toLocaleString('pt-BR')}</td>
+                            </tr>
+                        `;
+                    }).join('');
+                })
+                .catch(err => {
+                    console.error(err);
+                    tbody.innerHTML = "<tr><td colspan='3' style='color:red;'>Erro ao carregar dados.</td></tr>";
+                });
+        }
+
+        async function loadDashboard() {
+            try {
+                const response = await fetch('http://127.0.0.1:8000/crimes/mapa');
+                if (!response.ok) throw new Error("API Indisponível");
+                
+                const data = await response.json();
+                const listDiv = document.getElementById('ranking-list');
+                listDiv.innerHTML = '';
+
+                data.forEach((item, index) => {
+                    const marker = L.marker([item.latitude, item.longitude]).addTo(map);
+                    
+                    let detalhesHtml = '';
+                    if (item.detalhes) {
+                        Object.entries(item.detalhes).forEach(([tipo, qtd]) => {
+                            detalhesHtml += `<li><span>${tipo}:</span> <strong>${qtd.toLocaleString('pt-BR')}</strong></li>`;
+                        });
+                    }
+
+                    marker.bindPopup(`
+                        <div style="min-width:220px; font-family: sans-serif;">
+                            <h3 style="margin:0 0 10px 0; color:#2c3e50; border-bottom: 2px solid #1abc9c; padding-bottom: 3px;">${item.municipio}</h3>
+                            <ul class="popup-list">${detalhesHtml}</ul>
+                            <hr style="border:0; border-top:1px solid #eee; margin:8px 0;">
+                            <div style="display:flex; flex-direction:column; gap:5px;">
+                                <strong>Total: ${item.total.toLocaleString('pt-BR')}</strong>
+                                <button onclick="carregarTabelaFiltro('${item.municipio}')" style="background:#2c3e50; color:white; border:none; padding:6px 10px; border-radius:4px; cursor:pointer; font-weight:bold; margin-top:4px; font-size:0.85em;">📋 Abrir Tabela Completa</button>
+                            </div>
+                        </div>
+                    `);
+
+                    const div = document.createElement('div');
+                    div.className = 'ranking-item';
+                    div.innerHTML = `
+                        <span class="ranking-name">${index + 1}. ${item.municipio}</span>
+                        <span class="ranking-value">${item.total.toLocaleString('pt-BR')}</span>
+                    `;
+                    
+                    div.onclick = () => {
+                        map.flyTo([item.latitude, item.longitude], 12);
+                        marker.openPopup();
+                    };
+                    listDiv.appendChild(div);
+                });
+
+            } catch (err) {
+                console.error(err);
+                document.getElementById('ranking-list').innerHTML = 
+                    '<p style="color:#e74c3c; font-weight:bold; text-align:center;">Erro ao conectar ao servidor.</p>';
+            }
+        }
+
+        loadDashboard();
+    </script>
+</body>
+</html>
